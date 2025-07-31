@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - '3000:3000'
+    environment:
+      - NODE_ENV=production
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USERNAME=postgres
+      - DB_PASSWORD=postgres
+      - DB_DATABASE=blog
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - blog-network
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=blog
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - blog-network
+
+  pgadmin:
+    container_name: pgadmin_container
+    image: dpage/pgadmin4
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-pgadmin4@pgadmin.org}
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    volumes:
+      - ./pgadmin:/home/data
+    ports:
+      - 5050:80
+    networks:
+      - blog-network
+    restart: unless-stopped
+    depends_on:
+      - postgres
+
+  redis:
+    image: redis/redis-stack:latest # Официальный образ Redis Stack
+    container_name: redis
+    ports:
+      - '6379:6379' # Порт для доступа к Redis
+      - '8001:8001' # Порт для RedisInsight (веб-интерфейс)
+    volumes:
+      - redis-data:/data # Том для хранения данных Redis
+    environment:
+      - REDIS_STACK_PASSWORD=123 # Пароль для Redis (опционально)
+    restart: always # Автоматический перезапуск контейнера
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - blog-network
+
+volumes:
+  postgres-data:
+  redis-data:
+
+networks:
+  blog-network:
+    driver: bridge
